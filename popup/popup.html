@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Console Fix</title>
+		<link href="./popup.css" rel="stylesheet" />
+	</head>
+	<body>
+		<div class="popup">
+			<h1>API Inspector</h1>
+			<p class="subtitle">Use AI to fix console errors & warnings</p>
+			<div class="divider"></div>
+
+			<div class="card">
+				<label>API URL Patterns</label>
+				<input id="api-patterns" placeholder="/api/, /graphql, /v1/" />
+				<p class="hint">Example: /api/, /backend, /rest/v1</p>
+
+				<label class="checkbox">
+					<input type="checkbox" id="track-all" />
+					Track all JSON APIs
+				</label>
+
+				<button class="primary" id="save">Save Settings</button>
+				<p class="note">Note: Only HTTP 200 APIs are tracked.</p>
+				<div id="status" class="status"></div>
+			</div>
+
+			<div class="divider dark"></div>
+
+			<div class="help">
+				<h3>How to use</h3>
+				<ol>
+					<li>Open DevTools</li>
+					<li>Go to API Inspector</li>
+				</ol>
+			</div>
+		</div>
+		<script src="./popup.js"></script>
+	</body>
+</html>
+
+<!-- margin-top: 8px; color: green
+
+<div
+	style="
+		width: 400px;
+		display: flex;
+		gap: 4px;
+		align-items: center;
+		justify-content: center;
+	"
+>
+	<h2>Console Fix</h2>
+	-
+	<h3>Use AI to fix console errors & warnings</h3>
+</div>
+<div>
+	<label>API URL Patterns (comma-separated)</label>
+	<input id="api-patterns" placeholder="/api/, /graphql, /v1/" />
+	<div class="hint">Example: /api/, /backend, /rest/v1</div>
+
+	<label>
+		<input type="checkbox" id="track-all" /> Track all JSON APIs (ignores
+		patterns above)
+	</label>
+
+	<button id="save">Save Settings</button>
+	<div id="status" style="margin-top: 8px; color: green"></div>
+</div>
+<div>
+	<h3>Steps to run the extension</h3>
+	<ol>
+		<li>Open Devtools</li>
+		<li>Go to Network Tab First</li>
+		<li>Then go to API Inspector Tab</li>
+	</ol>
+</div> -->
