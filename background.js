@@ -1,35 +1,63 @@
 let apiRegistry = {}
+let currentOrigin = null
 
-// ---------- LOAD FROM STORAGE ON START ----------
-chrome.runtime.onInstalled.addListener(loadFromStorage)
-chrome.runtime.onStartup.addListener(loadFromStorage)
+let devtoolsPort = null
+
 chrome.runtime.onConnect.addListener((port) => {
 	if (port.name === "devtools") {
-		port.onDisconnect.addListener(() => {
-			console.log("Port disconnected")
+		devtoolsPort = port
+		console.log("DevTools connected")
+
+		port.onMessage.addListener((msg) => {
+			if (msg.type === "GET_REGISTRY") {
+				const { origin } = msg.payload || {}
+				const storageKey = `apiRegistry_${origin}`
+
+				chrome.storage.local.get([storageKey], (result) => {
+					port.postMessage({
+						type: "REGISTRY_DATA",
+						payload: result[storageKey] || {},
+					})
+				})
+			}
 		})
+
+		port.onDisconnect.addListener(() => {
+			console.log("DevTools disconnected")
+			devtoolsPort = null
+		})
+	}
+})
+
+//  ORIGIN fetched by content.js
+chrome.runtime.onMessage.addListener((msg) => {
+	if (msg.type === "PAGE_ORIGIN") {
+		currentOrigin = msg.origin
+		loadFromStorage()
 	}
 })
 
 function loadFromStorage() {
 	return new Promise((resolve) => {
-		chrome.storage.local.get(["apiRegistry"], (result) => {
-			if (result.apiRegistry) {
-				apiRegistry = result.apiRegistry
-				console.log("Loaded registry from storage:", apiRegistry)
+		const storageKey = `apiRegistry_${currentOrigin}`
+		chrome.storage.local.get([storageKey], (result) => {
+			if (result[storageKey]) {
+				apiRegistry = result[storageKey]
 			}
 			resolve()
 		})
 	})
 }
 
-// Initialize on script load
-loadFromStorage()
-
 // ---------- SAVE TO STORAGE ----------
-function saveToStorage() {
-	chrome.storage.local.set({ apiRegistry }, () => {
-		console.log("Saved to storage:", apiRegistry)
+function saveToStorage(origin) {
+	if (!origin) {
+		console.warn("Skipping save: origin not set")
+		return
+	}
+	const storageKey = `apiRegistry_${origin}`
+	chrome.storage.local.set({ [storageKey]: apiRegistry }, () => {
+		console.log("Saved to storage:")
 	})
 }
 
@@ -73,8 +101,8 @@ function compareSchemas(oldSchema, newSchema) {
 	const removed = []
 	const typeChanged = []
 
-	console.log("Flattened OLD:", oldFlat)
-	console.log("Flattened NEW:", newFlat)
+	// console.log("Flattened OLD:", oldFlat)
+	// console.log("Flattened NEW:", newFlat)
 
 	for (const key in newFlat) {
 		if (!(key in oldFlat)) {
@@ -110,110 +138,106 @@ function calculateStatus(diff) {
 }
 
 // ---------- MESSAGE LISTENER ----------
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
+	// if (currentOrigin !== origin) {
+	// 	currentOrigin = origin
+	// 	await loadFromStorage()
+	// }
 	if (msg.type === "NEW_SCHEMA") {
-		const { api, schema } = msg.payload
+		const { api, schema, origin } = msg.payload
 		const now = Date.now()
+		const storageKey = `apiRegistry_${origin}`
 
-		const existing = apiRegistry[api]
+		// Load registry for this specific origin
+		chrome.storage.local.get([storageKey], (result) => {
+			apiRegistry = result[storageKey] || {}
 
-		if (!existing) {
-			// New API detected
-			apiRegistry[api] = {
-				schema,
-				createdAt: now,
-				lastUpdated: now,
-				status: "new",
-				changes: { added: [], removed: [], typeChanged: [] },
-				pendingSchema: null, // No pending changes for new APIs
+			const existing = apiRegistry[api]
+
+			if (!existing) {
+				// New API detected
+				apiRegistry[api] = {
+					schema,
+					createdAt: now,
+					lastUpdated: now,
+					status: "new",
+					changes: { added: [], removed: [], typeChanged: [] },
+					pendingSchema: null,
+				}
+
+				console.log("New API registered:")
+				saveToStorage(origin)
+				if (devtoolsPort) {
+					devtoolsPort.postMessage({ type: "REGISTRY_UPDATED" })
+				}
+				return
 			}
 
-			console.log("New API registered:", api)
-			saveToStorage()
-			sendResponse({ success: true, status: "new" })
-			return true
-		}
+			// Compare with CURRENT saved schema (not pending)
+			const diff = compareSchemas(existing.schema, schema)
+			const status = calculateStatus(diff)
 
-		// Compare with CURRENT saved schema (not pending)
-		console.log("Comparing schemas for:", api)
-		const diff = compareSchemas(existing.schema, schema)
-		const status = calculateStatus(diff)
-
-		console.log("Diff:", diff)
-		console.log("Status:", status)
-
-		if (status === "unchanged") {
-			// No changes detected, just update lastUpdated
-			apiRegistry[api] = {
-				...existing,
-				lastUpdated: now,
-				status: "unchanged",
-				changes: { added: [], removed: [], typeChanged: [] },
-				pendingSchema: null,
+			if (status === "unchanged") {
+				apiRegistry[api] = {
+					...existing,
+					lastUpdated: now,
+					status: "unchanged",
+					changes: { added: [], removed: [], typeChanged: [] },
+					pendingSchema: null,
+				}
+				saveToStorage(origin)
+			} else {
+				apiRegistry[api] = {
+					...existing,
+					lastUpdated: now,
+					status,
+					changes: diff,
+					pendingSchema: schema,
+				}
+				saveToStorage(origin)
 			}
-			saveToStorage()
-		} else {
-			// Changes detected - store as pending, don't update main schema yet
-			apiRegistry[api] = {
-				...existing,
-				lastUpdated: now,
-				status,
-				changes: diff,
-				pendingSchema: schema, // Store the new schema as pending
+
+			if (devtoolsPort) {
+				devtoolsPort.postMessage({ type: "REGISTRY_UPDATED" })
 			}
-			saveToStorage()
-		}
+			sendResponse({ success: true, status })
+		}) // ⬅️ THIS CLOSING BRACKET FOR chrome.storage.local.get
 
-		sendResponse({ success: true, status })
-		return true
-	}
-
-	if (msg.type === "GET_REGISTRY") {
-		console.log("Sending registry:", apiRegistry)
-		sendResponse(apiRegistry)
 		return true
 	}
 
 	if (msg.type === "APPROVE_CHANGES") {
-		const { api } = msg.payload
+		const { api, origin } = msg.payload
 
-		if (apiRegistry[api] && apiRegistry[api].pendingSchema) {
-			// Update the schema with pending changes
-			apiRegistry[api] = {
-				...apiRegistry[api],
-				schema: apiRegistry[api].pendingSchema,
-				pendingSchema: null,
-				status: "unchanged",
-				changes: { added: [], removed: [], typeChanged: [] },
-				lastUpdated: Date.now(),
-			}
-
-			saveToStorage()
-			sendResponse({ success: true })
-		} else {
-			sendResponse({ success: false, error: "No pending changes" })
+		if (!origin) {
+			sendResponse({ success: false, error: "No origin provided" })
+			return true
 		}
-		return true
-	}
 
-	if (msg.type === "REJECT_CHANGES") {
-		const { api } = msg.payload
+		const storageKey = `apiRegistry_${origin}`
+		chrome.storage.local.get([storageKey], (result) => {
+			apiRegistry = result[storageKey] || {}
 
-		if (apiRegistry[api] && apiRegistry[api].pendingSchema) {
-			// Clear pending changes, keep old schema
-			apiRegistry[api] = {
-				...apiRegistry[api],
-				pendingSchema: null,
-				status: "unchanged",
-				changes: { added: [], removed: [], typeChanged: [] },
-				lastUpdated: Date.now(),
+			if (apiRegistry[api] && apiRegistry[api].pendingSchema) {
+				apiRegistry[api] = {
+					...apiRegistry[api],
+					schema: apiRegistry[api].pendingSchema,
+					pendingSchema: null,
+					status: "unchanged",
+					changes: { added: [], removed: [], typeChanged: [] },
+					lastUpdated: Date.now(),
+				}
+
+				saveToStorage(origin) // ⬅️ Pass origin
+				if (devtoolsPort) {
+					devtoolsPort.postMessage({ type: "REGISTRY_UPDATED" })
+				}
+				sendResponse({ success: true })
+			} else {
+				sendResponse({ success: false, error: "No pending changes" })
 			}
+		})
 
-			saveToStorage()
-			sendResponse({ success: true })
-		} else {
-			sendResponse({ success: false, error: "No pending changes" })
-		}
 		return true
 	}
 
