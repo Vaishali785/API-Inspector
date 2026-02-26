@@ -213,6 +213,10 @@ chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
 			sendResponse({ success: false, error: "No origin provided" })
 			return true
 		}
+		if (!devtoolsPort) {
+			sendResponse({ success: false, error: "DevTools not connected" })
+			return true
+		}
 
 		const storageKey = `apiRegistry_${origin}`
 		chrome.storage.local.get([storageKey], (result) => {
