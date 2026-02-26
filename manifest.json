@@ -1,17 +1,25 @@
 {
 	"manifest_version": 3,
-	"name": "Console Fix",
-	"description": "Fix console issues and warnings using AI",
+	"name": "API Inspector",
+	"description": "Track API schema changes in real-time. Never miss breaking changes during development.",
 	"version": "1.0",
 	"icons": {
-		"16": "icons/icon.png"
+		"16": "icons/icon16.png",
+		"32": "icons/icon32.png",
+		"48": "icons/icon48.png",
+		"128": "icons/icon128.png"
 	},
 	"action": {
 		"default_popup": "./popup/popup.html"
 	},
-
+	"content_scripts": [
+		{
+			"matches": ["<all_urls>"],
+			"js": ["./scripts/content.js"]
+		}
+	],
 	"permissions": ["storage"],
-	"devtools_page": "devtools/devtools.html",
+	"devtools_page": "./devtools/devtools.html",
 	"background": {
 		"service_worker": "background.js",
 		"type": "module"
