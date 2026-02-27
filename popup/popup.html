@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Console Fix</title>
+		<title>API Inspector Fix</title>
 		<link href="./popup.css" rel="stylesheet" />
 	</head>
 	<body>
@@ -22,19 +22,60 @@
 					Track all JSON APIs
 				</label>
 
-				<button class="primary" id="save">Save Settings</button>
-				<p class="note">Note: Only HTTP 200 APIs are tracked.</p>
+				<div class="btns">
+					<button class="primary" id="save">Save Settings</button>
+					<button class="secondary" id="delete">
+						Clear APIs (for this site)
+					</button>
+				</div>
+				<!-- <p class="note">Note: Only HTTP 200 APIs are tracked.</p> -->
 				<div id="status" class="status"></div>
 			</div>
 
 			<div class="divider dark"></div>
 
 			<div class="help">
-				<h3>How to use</h3>
-				<ol>
-					<li>Open DevTools</li>
-					<li>Go to API Inspector</li>
-				</ol>
+				<details>
+					<summary>How to use</summary>
+					<ol>
+						<li>
+							Set API filters in the popup and click
+							<strong>Save Settings</strong>.
+						</li>
+						<li>Open <strong>DevTools</strong> (F12).</li>
+						<li>
+							Reload the page (Hard reload recommended to avoid 304 cache).
+						</li>
+						<li>
+							Go to the <strong>API Inspector</strong> tab to view tracked APIs.
+						</li>
+					</ol>
+				</details>
+
+				<details>
+					<summary>Hints & Info</summary>
+					<ul>
+						<li>
+							Only APIs with <strong>HTTP 200</strong> status are tracked.
+						</li>
+						<li>Cached requests (<strong>HTTP 304</strong>) are ignored.</li>
+						<li>
+							Third-party APIs are not captured if the request
+							<strong
+								>referrer does not start with the current site's origin</strong
+							>.
+						</li>
+						<li>
+							Changing filters does <strong>not</strong> remove previously
+							captured APIs.
+						</li>
+						<li>
+							If filters were incorrect, use
+							<strong>Clear APIs (for this site)</strong> and reload.
+						</li>
+						<li>Theme changes apply after reopening DevTools.</li>
+					</ul>
+				</details>
 			</div>
 		</div>
 		<script src="./popup.js"></script>
