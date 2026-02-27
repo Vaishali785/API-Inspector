@@ -1,110 +1,189 @@
-# API Inspector Chrome Extension
+# API Inspector ⚡
 
-Track and monitor API schema changes in real-time during development.
+A Chrome DevTools extension that detects and tracks API schema changes in real-time.
 
-## Features
+API Inspector helps frontend developers catch breaking API changes early by comparing live API responses against previously saved schemas — directly inside Chrome DevTools.
 
-- 🔍 Automatically detects API calls and extracts JSON schemas
-- 📊 Tracks schema changes (added fields, removed fields, type changes)
-- ⚠️ Alerts on breaking changes vs minor changes
-- ✅ Manual approval workflow for schema updates
-- 🌙 Automatic dark mode support
-- 💾 Persistent storage of API schemas
+---
 
-## Installation
+## 🚀 Why API Inspector?
 
-1. Clone or download this repository
-2. Open Chrome and navigate to `chrome://extensions/`
-3. Enable "Developer mode" (toggle in top right)
-4. Click "Load unpacked"
-5. Select the folder containing these extension files
+APIs evolve constantly during development:
 
-## Files Structure
+- New fields get added
+- Fields get removed silently
+- Data types change unexpectedly
+- Backend updates break UI without warning
 
-```
+Manually tracking these changes is difficult and error-prone.
+
+API Inspector provides:
+
+✔ Automatic schema generation  
+✔ Real-time schema diff detection  
+✔ Breaking vs minor change classification  
+✔ Manual approval workflow  
+✔ Per-domain API tracking
+
+All processed locally in the browser.
+
+---
+
+## ✨ Features
+
+- 🔍 DevTools panel integration
+- 📦 Automatic JSON schema extraction
+- 🔁 Schema comparison engine
+- ⚠️ Breaking change detection
+- 🗂 Per-origin storage isolation
+- 🎯 Custom URL-based API filtering
+- 🧹 Clear APIs per site
+- 🌙 Dark & Light theme support (matches DevTools)
+
+---
+
+## 🧠 How It Works
+
+1. The extension listens to network requests inside DevTools.
+2. Only JSON responses with HTTP `200` status are processed.
+3. The response body is converted into a structural schema.
+4. The schema is flattened and compared against the stored version.
+5. Differences are categorized as:
+   - `breaking`
+   - `minor`
+   - `unchanged`
+6. If changes are detected, they must be manually approved.
+
+All processing happens locally.  
+No API data is sent externally.
+
+---
+
+## 🔄 Approval Workflow
+
+When a schema change is detected:
+
+1. API status updates to **`breaking`** or **`minor`**
+2. A pending update indicator appears in the DevTools panel
+3. The new schema is displayed side-by-side with the current schema
+4. Differences are highlighted (added, removed, type changes)
+5. Click **"Update Schema"** to approve the changes
+6. The approved schema replaces the previous version in Chrome storage
+
+This prevents silent contract drift and ensures intentional schema updates.
+
+---
+
+## ⚙️ Customization
+
+Configuration is available per domain via the popup.
+
+### 🔎 API Filters
+
+- Add URL patterns (e.g. `/xhr`, `/settings`)
+- Only matching requests are tracked
+- Multiple patterns supported
+
+### 📦 Track All JSON
+
+- Optionally track all JSON responses
+- Useful during exploration
+- Can later be restricted using filters
+
+### 🧹 Clear Site APIs
+
+- Reset all stored schemas for the current domain
+- Useful if filters were added late
+- Does not affect other domains
+
+---
+
+## 📌 Behavior Notes
+
+- Only HTTP `200` responses are processed.
+- Cached responses (`304`) are ignored.
+- Third-party APIs are only captured if the request referrer starts with the inspected page's origin.
+- Changing filters does not remove previously captured APIs.
+- DevTools may need to be reopened after theme changes.
+
+---
+
+## 🔐 Privacy & Security
+
+API Inspector:
+
+- Does NOT collect user data
+- Does NOT transmit API responses
+- Does NOT modify network requests
+- Stores schema data locally using `chrome.storage`
+
+All analysis is performed locally inside the browser.
+
+---
+
+## 🧩 Architecture Overview
+
+- Manifest V3
+- Background service worker
+- DevTools panel integration
+- Content script (origin detection)
+- Per-origin schema registry
+- Schema flattening + diff engine
+- Manual approval workflow
+- Safe dynamic rendering
+
+---
+
+## 📁 Project Structure
+
 api-inspector/
-├── manifest.json          # Extension configuration
-├── background.js          # Background service worker (schema comparison logic)
-├── devtools.js           # DevTools network listener
-├── devtools.html         # DevTools page loader
-├── panel.js              # Panel UI logic
-├── panel.html            # Panel HTML structure
-├── panel.css             # Panel styles (with dark mode)
-├── icon16.png            # Extension icon (16x16)
-├── icon48.png            # Extension icon (48x48)
-└── icon128.png           # Extension icon (128x128)
-```
+│
+├── manifest.json
+├── background.js
+├── popup/
+│ ├── popup.html
+│ ├── popup.js
+│ └── popup.css
+│
+├── devtools/
+│ ├── devtools.html
+│ ├── devtools.js
+│ ├── panel.html
+│ ├── panel.js
+│ └── panel.css
+│
+└── icons/
 
-## Usage
+---
 
-1. Open Chrome DevTools (F12 or right-click → Inspect)
-2. Navigate to the "API Inspector" tab
-3. Browse your application that makes API calls
-4. The extension will automatically track APIs matching:
-   - URLs containing `/api/`
-   - URLs containing `/projects`
-   - Content-Type: `application/json`
+## 🛠 Installation (Development)
 
-## How It Works
+1. Clone the repository
+2. Open `chrome://extensions`
+3. Enable **Developer Mode**
+4. Click **Load Unpacked**
+5. Select the project folder
 
-### Schema Detection
+---
 
-When an API call is made, the extension:
+## 🎯 Future Improvements
 
-1. Intercepts the response
-2. Parses the JSON
-3. Generates a schema showing field names and types
-4. Compares with previously saved schema
+- Schema version history
+- Snapshot timeline
+- Regex-based filtering
+- Field ignore rules
+- Schema export
+- CI contract validation integration
 
-### Change Detection
+---
 
-Three types of changes are tracked:
+## 👩‍💻 Author
 
-- **🟢 Minor**: New fields added (non-breaking)
-- **🔴 Breaking**: Fields removed or types changed
-- **✅ Up-to-date**: No changes detected
+**Vaishali**
+Frontend Developer  
+Building tools that improve developer workflows.
 
-### Approval Workflow
-
-When changes are detected:
-
-1. Status changes to "breaking" or "minor"
-2. Pending notice appears with change details
-3. New schema is shown with highlighted changes
-4. Click "✅ Update Schema" to accept the changes
-5. Schema is saved to Chrome storage
-
-## Customization
-
-### Tracking Different APIs
-
-Edit `devtools.js` line 29 to customize which APIs to track:
-
-```javascript
-const isBackend = url.includes("/api/") || url.includes("/your-endpoint")
-```
-
-### Change Status Colors
-
-Edit `panel.css` badge styles to customize colors:
-
-```css
-.badge.breaking {
-	background: #ffebee;
-	color: #c62828;
-}
-```
-
-## Storage
-
-All schemas are stored in Chrome's local storage:
-
-- Access via Chrome DevTools → Application → Storage → Extension
-- Clear storage: `chrome.storage.local.clear()`
-
-## Development
-
-### Testing Changes
+<!-- ### Testing Changes
 
 1. Make code changes
 2. Go to `chrome://extensions/`
@@ -115,4 +194,4 @@ All schemas are stored in Chrome's local storage:
 
 - Background script logs: `chrome://extensions/` → "Inspect views: service worker"
 - Panel logs: DevTools → API Inspector tab → Console
-- DevTools logs: Regular DevTools console
+- DevTools logs: Regular DevTools console -->
