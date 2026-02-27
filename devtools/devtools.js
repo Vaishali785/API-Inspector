@@ -2,7 +2,40 @@
 function normalizeApiKey(url) {
 	try {
 		const u = new URL(url)
-		return `${u.origin}${u.pathname}`
+		// Common pagination/cursor parameters to ignore
+		const ignoredParams = [
+			"page",
+			"pageSize",
+			"limit",
+			"offset",
+			"cursor",
+			"skip",
+			"take",
+			"per_page",
+			"perPage",
+			"count",
+			"size",
+			// Add more as needed
+		]
+		// Get all params except ignored ones
+		const params = new URLSearchParams(u.search)
+		const relevantParams = []
+
+		for (const [key, value] of params.entries()) {
+			// Case-insensitive check
+			if (
+				!ignoredParams.some((ignored) =>
+					key.toLowerCase().includes(ignored.toLowerCase()),
+				)
+			) {
+				relevantParams.push(`${key}=${value}`)
+			}
+		}
+
+		// Build normalized URL
+		const paramString =
+			relevantParams.length > 0 ? `?${relevantParams.sort().join("&")}` : ""
+		return `${u.origin}${u.pathname}${paramString}`
 	} catch (e) {
 		return url // fallback if URL parsing fails
 	}
@@ -19,7 +52,7 @@ port.onDisconnect.addListener(() => {
 })
 
 // Create custom panel
-chrome.devtools.panels.create("API Inspector", "", "devtools/panel.html")
+chrome.devtools.panels.create("API Inspector", "", "./devtools/panel.html")
 
 // Generate schema recursively
 function generateSchema(obj) {
@@ -44,30 +77,48 @@ function generateSchema(obj) {
 let apiPatterns = ["/api/", "/projects"] // defaults
 let trackAllJSON = false
 
-chrome.storage.local.get(["apiPatterns", "trackAllJSON"], (result) => {
-	if (result.apiPatterns && result.apiPatterns.length > 0) {
-		apiPatterns = result.apiPatterns
-	}
-	trackAllJSON = result.trackAllJSON || false
-	console.log("Loaded API patterns:", apiPatterns, "Track all:", trackAllJSON)
-})
+function loadSettings(origin) {
+	const settingsKey = `apiSettings_${origin}`
+
+	chrome.storage.local.get([settingsKey], (result) => {
+		const settings = result[settingsKey]
+
+		if (settings) {
+			apiPatterns = settings.apiPatterns
+			trackAllJSON = settings.trackAllJSON
+		}
+	})
+}
 
 // Listen for settings changes
 chrome.storage.onChanged.addListener((changes, area) => {
 	if (area === "local") {
-		if (changes.apiPatterns) {
-			apiPatterns = changes.apiPatterns.newValue || ["/api/"]
-			console.log("Updated API patterns:", apiPatterns)
-		}
-		if (changes.trackAllJSON) {
-			trackAllJSON = changes.trackAllJSON.newValue || false
-			console.log("Updated track all:", trackAllJSON)
+		//  Check if any domain's settings changed
+		for (const key in changes) {
+			if (key.startsWith("apiSettings_")) {
+				const changedOrigin = key.replace("apiSettings_", "")
+
+				// Only update if it's for current page
+				chrome.devtools.inspectedWindow.eval(
+					"window.location.origin",
+					(currentOrigin) => {
+						if (changedOrigin === currentOrigin) {
+							const newSettings = changes[key].newValue
+							apiPatterns = newSettings.apiPatterns || ["/api/"]
+							trackAllJSON = newSettings.trackAllJSON || false
+						}
+					},
+				)
+			}
 		}
 	}
 })
 
 // Listen to network calls
 chrome.devtools.inspectedWindow.eval("window.location.origin", (origin) => {
+	// Load settings for this domain
+	loadSettings(origin)
+
 	chrome.devtools.network.onRequestFinished.addListener((networkReq) => {
 		const url = networkReq.request.url
 
@@ -84,16 +135,19 @@ chrome.devtools.inspectedWindow.eval("window.location.origin", (origin) => {
 		const status = networkReq.response?.status
 
 		const failedStatus = !status || status < 200 || status >= 300
+
+		if (!status || status < 200 || status >= 300) return
+
+		if (!isJson) return
+
 		if (shouldTrack && !failedStatus) {
 			// Filter: only track APIs from the same origin
 
 			const apiOrigin = new URL(url).origin
 			const referer = getHeader(networkReq.request.headers, "referer")
 			const isReferrer = referer && referer.startsWith(origin)
-			if (apiOrigin !== origin && !isReferrer) {
-				console.log("❌ Skipping external API:", url)
-				return
-			}
+			if (apiOrigin !== origin && !isReferrer) return
+
 			networkReq.getContent((body) => {
 				try {
 					const parsed = JSON.parse(body)
