@@ -136,23 +136,25 @@ All analysis is performed locally inside the browser.
 
 ## 📁 Project Structure
 
-api-inspector/
-│
-├── manifest.json
-├── background.js
-├── popup/
-│ ├── popup.html
-│ ├── popup.js
-│ └── popup.css
-│
-├── devtools/
-│ ├── devtools.html
-│ ├── devtools.js
-│ ├── panel.html
-│ ├── panel.js
-│ └── panel.css
-│
-└── icons/
+```
+    api-inspector/
+    │
+    ├── manifest.json
+    ├── background.js
+    ├── popup/
+    │ ├── popup.html
+    │ ├── popup.js
+    │ └── popup.css
+    │
+    ├── devtools/
+    │ ├── devtools.html
+    │ ├── devtools.js
+    │ ├── panel.html
+    │ ├── panel.js
+    │ └── panel.css
+    │
+    └── icons/
+```
 
 ---
 
