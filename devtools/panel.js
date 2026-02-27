@@ -1,5 +1,124 @@
+let devtoolsPort = null
 const theme = chrome.devtools.panels.themeName
 document.documentElement.dataset.theme = theme
+// const SORT_MODES = {
+// 	RECENT: "recent",
+// 	BREAKING: "breaking",
+// 	A_Z: "az",
+// }
+// let currentSort = SORT_MODES.RECENT
+
+const SORT_MODES = ["recent", "breaking", "az"]
+let currentSortIndex = 0
+let currentSort = SORT_MODES[0]
+
+function escapeHTML(str) {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#039;")
+}
+
+function showReloadNotice() {
+	const container = document.getElementById("panelBody")
+	if (!container) return
+
+	container.innerHTML = `
+		<div class="reload-notice">
+			<h2 class="reload-title">Extension Reloaded</h2>
+			<p class="reload-text">
+				The extension was reloaded. Please close DevTools and reopen it.
+			</p>
+			<div class="reload-steps">
+				<ol>
+					<li>Close DevTools (this panel)</li>
+					<li>Reopen DevTools (F12)</li>
+					<li>Go to API Inspector tab</li>
+				</ol>
+			</div>
+		</div>
+	`
+}
+
+function connectPort() {
+	try {
+		devtoolsPort = chrome.runtime.connect({ name: "devtools" })
+		console.log("✅ Port connected")
+
+		// Message listener
+		devtoolsPort.onMessage.addListener((msg) => {
+			if (msg.type === "REGISTRY_UPDATED") {
+				console.log("🔔 Registry updated notification received")
+				loadRegistry()
+			}
+
+			if (msg.type === "REGISTRY_DATA") {
+				console.log("📦 Registry data received")
+				renderRegistry(msg.payload)
+			}
+		})
+
+		// Detect context invalidation
+		devtoolsPort.onDisconnect.addListener(() => {
+			console.log("🔴 DevTools port disconnected!")
+			showReloadNotice()
+		})
+
+		// Load initial data
+		loadRegistry()
+	} catch (error) {
+		console.error("❌ Failed to connect port:", error)
+		showReloadNotice()
+	}
+}
+// <div style="
+//     padding: 40px;
+//     text-align: center;
+//     background: #fff3cd;
+//     border: 2px solid #ffc107;
+//     border-radius: 8px;
+//     margin: 20px;
+// ">
+//     <h2>⚠️ Extension Reloaded</h2>
+//     <p>The extension was reloaded. Please close DevTools and reopen it.</p>
+//     <p style="color: #666; font-size: 14px; margin-top: 20px;">
+//         <strong>Steps:</strong><br>
+//         1. Close DevTools (this panel)<br>
+//         2. Reopen DevTools (F12)<br>
+//         3. Go to API Inspector tab
+//     </p>
+// </div>
+
+// Connect on load
+connectPort()
+// updateSortButtonLabel()
+
+// document.getElementById("sortButton").addEventListener("change", (e) => {
+// 	currentSort = e.target.value
+// 	loadRegistry()
+// })
+
+function updateSortButtonLabel() {
+	const labels = {
+		recent: "Sort: Recent",
+		breaking: "Sort: Breaking",
+		az: "Sort: A-Z",
+	}
+
+	sortButton.textContent = labels[currentSort]
+}
+
+const sortButton = document.getElementById("sortButton")
+
+sortButton.addEventListener("click", () => {
+	currentSortIndex = (currentSortIndex + 1) % SORT_MODES.length
+	currentSort = SORT_MODES[currentSortIndex]
+
+	updateSortButtonLabel()
+	loadRegistry()
+})
 
 function highlightSchema(schema, changes, type) {
 	const json = JSON.stringify(schema, null, 2)
@@ -48,10 +167,11 @@ function highlightSchema(schema, changes, type) {
 				}
 			}
 
+			const safeLine = escapeHTML(trimmed)
 			// Track depth while inside a block
 			if (insideHighlightBlock) {
 				// Count opening braces/brackets
-				for (const char of line) {
+				for (const char of safeLine) {
 					if (char === "{") braceDepth++
 					if (char === "[") bracketDepth++
 					if (char === "}") braceDepth--
@@ -64,8 +184,8 @@ function highlightSchema(schema, changes, type) {
 					// This is the last line of the block
 					const highlightedLine =
 						type === "old"
-							? `<span class="diff-removed">${line}</span>`
-							: `<span class="diff-added">${line}</span>`
+							? `<span class="diff-removed">${safeLine}</span>`
+							: `<span class="diff-added">${safeLine}</span>`
 
 					insideHighlightBlock = false
 					blockFieldName = null
@@ -74,30 +194,39 @@ function highlightSchema(schema, changes, type) {
 
 				// We're inside the block
 				return type === "old"
-					? `<span class="diff-removed">${line}</span>`
-					: `<span class="diff-added">${line}</span>`
+					? `<span class="diff-removed">${safeLine}</span>`
+					: `<span class="diff-added">${safeLine}</span>`
 			}
-
-			return line
+			return safeLine
 		})
 		.join("\n")
 }
 
-function createApiItem(api, data) {
+function createApiItem(api, data, index) {
 	const wrapper = document.createElement("div")
 	wrapper.className = "api-item"
 
 	const header = document.createElement("div")
 	header.className = "api-header"
 
+	const headerTitleWrap = document.createElement("div")
+	headerTitleWrap.className = "api-header-title-wrap"
+
 	const title = document.createElement("span")
+	title.className = "api-header--title"
 	title.textContent = api
 
+	const indexHolder = document.createElement("span")
+	indexHolder.className = "api-header--index"
+	indexHolder.textContent = index + 1
+
 	const badge = document.createElement("span")
-	badge.className = `badge ${data.status}`
+	badge.className = `api-header--badge badge ${data.status}`
 	badge.textContent = data.status
 
-	header.appendChild(title)
+	headerTitleWrap.appendChild(indexHolder)
+	headerTitleWrap.appendChild(title)
+	header.appendChild(headerTitleWrap)
 	header.appendChild(badge)
 
 	const body = document.createElement("div")
@@ -113,28 +242,6 @@ function createApiItem(api, data) {
 			data.changes.typeChanged?.length > 0)
 
 	let changesHtml = ""
-	if (hasChanges) {
-		changesHtml = `<div class="changes-section">
-			<h4><img src="icons/search.png" alt="Search" class="icon"> Changes Detected</h4>`
-
-		if (data.changes.added?.length > 0) {
-			changesHtml += `<p><img src="icons/plus.png" alt="Added" class="icon-small"><strong>Added Fields:</strong> ${data.changes.added.join(", ")}</p>`
-		}
-
-		if (data.changes.removed?.length > 0) {
-			changesHtml += `<p><img src="icons/minus.png" alt="Removed" class="icon-small"><strong>Removed Fields:</strong> ${data.changes.removed.join(", ")}</p>`
-		}
-
-		if (data.changes.typeChanged?.length > 0) {
-			changesHtml += `<p><strong>🔄 Type Changed:</strong></p><ul>`
-			data.changes.typeChanged.forEach((change) => {
-				changesHtml += `<li><code>${change.field}</code>: <span class="old-type">${change.oldType}</span> → <span class="new-type">${change.newType}</span></li>`
-			})
-			changesHtml += `</ul>`
-		}
-
-		changesHtml += `</div>`
-	}
 
 	body.innerHTML = `
     
@@ -157,15 +264,15 @@ function createApiItem(api, data) {
         </div>
 
         <div class="action-buttons">
-          <button class="btn-approve" data-api="${api}">Update Schema </button>
+          <button class="btn-approve" data-api="${escapeHTML(api)}">Update Schema </button>
         </div>
       `
 				: `
         <div class="schema-display">
           <h4>Current Schema</h4>
-          <pre>${JSON.stringify(data.schema, null, 2)}</pre>
+          <pre>${escapeHTML(JSON.stringify(data.schema, null, 2))}</pre>
         </div>
-        ${hasChanges && data.status !== "new" ? changesHtml : ""}
+       
 
          <div class='date-display'>
             <p><strong>Created:</strong> ${new Date(data.createdAt).toLocaleString()}</p>
@@ -233,6 +340,37 @@ function rejectChanges(api) {
 	)
 }
 
+function sortRegistryEntries(entries, sortMode) {
+	const statusRank = {
+		breaking: 0,
+		minor: 1,
+		new: 2,
+		unchanged: 3,
+	}
+	const sorted = [...entries]
+	switch (sortMode) {
+		// case SORT_MODES.BREAKING:
+		case "breaking":
+			return entries.sort((a, b) => {
+				const sa = statusRank[a[1].status] ?? 99
+				const sb = statusRank[b[1].status] ?? 99
+				if (sa !== sb) return sa - sb
+				return (b[1].lastUpdated || 0) - (a[1].lastUpdated || 0)
+			})
+
+		// case SORT_MODES.A_Z:
+		case "az":
+			return entries.sort((a, b) => a[0].localeCompare(b[0]))
+
+		// case SORT_MODES.RECENT:
+		case "recent":
+		default:
+			return entries.sort(
+				(a, b) => (b[1].lastUpdated || 0) - (a[1].lastUpdated || 0),
+			)
+	}
+}
+
 function renderRegistry(registry) {
 	const container = document.getElementById("output")
 
@@ -243,7 +381,10 @@ function renderRegistry(registry) {
 
 	container.innerHTML = ""
 
-	const entries = Object.entries(registry)
+	// const entries = Object.entries(registry)
+
+	let entries = Object.entries(registry)
+	entries = sortRegistryEntries(entries, currentSort)
 
 	if (entries.length === 0) {
 		container.innerHTML =
@@ -251,22 +392,10 @@ function renderRegistry(registry) {
 		return
 	}
 
-	entries.forEach(([api, data]) => {
-		container.appendChild(createApiItem(api, data))
+	entries.forEach(([api, data], index) => {
+		container.appendChild(createApiItem(api, data, index))
 	})
 }
-
-const devtoolsPort = chrome.runtime.connect({ name: "devtools" })
-
-devtoolsPort.onMessage.addListener((msg) => {
-	if (msg.type === "REGISTRY_UPDATED") {
-		loadRegistry()
-	}
-
-	if (msg.type === "REGISTRY_DATA") {
-		renderRegistry(msg.payload)
-	}
-})
 
 function loadRegistry() {
 	// Get current page origin
@@ -279,7 +408,7 @@ function loadRegistry() {
 }
 
 // Load on page load
-document.addEventListener("DOMContentLoaded", loadRegistry)
+// document.addEventListener("DOMContentLoaded", loadRegistry)
 
 // Listen for storage changes
 chrome.storage.onChanged.addListener((changes, area) => {

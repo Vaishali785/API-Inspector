@@ -78,7 +78,19 @@
 		</style> -->
 		<link rel="stylesheet" href="panel.css" />
 	</head>
-	<body>
+	<body id="panelBody">
+		<div class="panel-header">
+			<span class="panel-title">API Inspector</span>
+
+			<!-- <select id="sortSelect" class="sort-select">
+				<option value="recent">Recent</option>
+				<option value="breaking">Breaking first</option>
+				<option value="az">A-Z</option>
+			</select> -->
+
+			<button id="sortButton" class="sort-button">Sort: Recent</button>
+		</div>
+		<div class="divider"></div>
 		<div id="output"></div>
 		<script src="panel.js"></script>
 	</body>
